@@ -5,10 +5,6 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 from magneto_policy_learner import CustomActorCriticPolicy
 
-import numpy as np
-from stable_baselines3 import TD3
-from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
-
 # %%
 def train_ppo (env, path, rel_path, timesteps):
     # . Training    
@@ -44,68 +40,16 @@ def train_ppo (env, path, rel_path, timesteps):
         
     finally:
         model.save(path + rel_path + 'breakpoint.zip')
-        
-def eval_ppo (env, path, rel_path, iterations):
-    # . Evaluation
-    model = PPO.load(path + rel_path + 'breakpoint.zip')
-    # model = PPO.load(path + rel_path + 'weights/magneto_2800000_steps.zip')
-    
-    for _ in range(iterations):
-        obs, _ = env.reset()
-        over = False
-        counter = 0
-        while not over:
-            action, _states = model.predict(obs)
-            obs, rewards, over, _, _ = env.step(action)
-            env.render()
-            counter += 1
-    env.close()
-
-def test_ppo (env, path, rel_path):
-    model = PPO.load(path + rel_path + 'breakpoint.zip')
-    
-    obs, _ = env.reset()
-    for i in range(3):
-        action, _states = model.predict(obs)
-        print(f'Action: {action}')
-        obs, rewards, over, _, _ = env.step(action)
-        print(f'Reward: {rewards}')
 
 def main ():
-    # . Trying to learn SOMETHING
     path = '/home/steven/magneto_ws/outputs/'
-    
     env = MagnetoEnv(render_mode="human", sim_mode="grid", magnetic_seeds=5)
     rel_path = 'lstm/'
-    # rel_path = 'independent_walking/ppo/scaled_obs_space_body/'
     
     # . Training
     train_ppo(env, path, rel_path, 300000)
-    
-    # . Evaluation
-    # eval_ppo(env, path, rel_path, 10)
-    
-    # . Test
-    # test_ppo(env, path, rel_path)
 
 if __name__ == "__main__":
     main()
-
-# %%
-env = MagnetoEnv(render_mode="human", sim_mode="grid", magnetic_seeds=5)
-
-# %%
-env.reset()
-
-# %%
-for i in range(5):
-    env.reset()
-    over = False
-    while not over:
-        action = env.action_space.sample()
-        obs, rewards, over, _, _ = env.step(action)
-        print(obs.shape)
-        print(obs)
-        env.render()
 
 # %%
