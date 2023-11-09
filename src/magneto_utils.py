@@ -1,10 +1,28 @@
 #!/usr/bin/env python3
 import numpy as np
 import math
-from geometry_msgs.msg import Pose
+# from geometry_msgs.msg import Pose
 import random
 import tqdm
 from scipy.spatial.transform import Rotation as R
+
+class Pose ():
+    def __init__(self) -> None:
+        self.position = Point()
+        self.orientation = Quaternion()
+
+class Point ():
+    def __init__(self) -> None:
+        self.x = 0
+        self.y = 0
+        self.z = 0
+
+class Quaternion ():
+    def __init__(self) -> None:
+        self.w = 0
+        self.x = 0
+        self.y = 0
+        self.z = 0
 
 class MagnetoAction (object):
     def __init__(self, idx:int=None, pose:Pose=None, link_idx:str=None) -> None:
