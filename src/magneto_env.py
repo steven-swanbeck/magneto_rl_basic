@@ -29,43 +29,54 @@ class MagnetoEnv (Env):
             self.plugin = GamePlugin(render_mode, self.metadata["render_fps"], magnetic_seeds)
             self.render_mode = render_mode
         
-        act_low = np.array([-1, -1, -1, -1, -1, -1])
-        act_high = np.array([1, 1, 1, 1, 1, 1])
-        self.action_space = spaces.Box(low=act_low, high=act_high, dtype=np.float32)
+        # act_low = np.array([-1, -1, -1, -1, -1, -1])
+        # act_high = np.array([1, 1, 1, 1, 1, 1])
+        # self.action_space = spaces.Box(low=act_low, high=act_high, dtype=np.float32)
         
         # four legs, 5 values associated with step sizes (0.08, 0.04, 0.00, -0.04, -0.08)
         self.action_space = spaces.MultiDiscrete([4, 5, 5])
         self.action_map = {0:0.08, 1:0.04, 2:0.02, 3:0.0, 4:-0.02, 5:-0.04, 6:-0.08}
         
-        x_min_global = -10./10 # +
-        x_max_global = 10./10 # +
-        yaw_min = -np.pi
-        y_min_global = -10./10 # +
-        y_max_global = 10./10 # +
-        goal_min_x = -5.
-        goal_max_x = 5.
-        yaw_max = np.pi
-        goal_min_y = -5.
-        goal_max_y = 5.
-        mag_min = 0.
-        mag_max = 1.
+        # x_min_global = -10./10 # +
+        # x_max_global = 10./10 # +
+        # yaw_min = -np.pi
+        # y_min_global = -10./10 # +
+        # y_max_global = 10./10 # +
+        # goal_min_x = -5.
+        # goal_max_x = 5.
+        # yaw_max = np.pi
+        # goal_min_y = -5.
+        # goal_max_y = 5.
+        # mag_min = 0.
+        # mag_max = 1.
         
-        # TODO figure out how I want to add the magnetism (whole robot or legs? maybe projection in front of it?)
-        obs_low = np.array([
-            x_min_global, y_min_global,
-            x_min_global, y_min_global,
-            x_min_global, y_min_global,
-            x_min_global, y_min_global,
-            x_min_global, y_min_global,
-        ])
-        obs_high = np.array([
-            x_max_global, y_max_global,
-            x_max_global, y_max_global,
-            x_max_global, y_max_global,
-            x_max_global, y_max_global,
-            x_max_global, y_max_global,
-        ])
-        self.observation_space = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
+        # # TODO figure out how I want to add the magnetism (whole robot or legs? maybe projection in front of it?)
+        # obs_low = np.array([
+        #     x_min_global, y_min_global,
+        #     x_min_global, y_min_global,
+        #     x_min_global, y_min_global,
+        #     x_min_global, y_min_global,
+        #     x_min_global, y_min_global,
+        # ])
+        # obs_high = np.array([
+        #     x_max_global, y_max_global,
+        #     x_max_global, y_max_global,
+        #     x_max_global, y_max_global,
+        #     x_max_global, y_max_global,
+        #     x_max_global, y_max_global,
+        # ])
+        # self.observation_space = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
+        
+        '''
+        This is currently:
+        goal_x, goal_y, foot0_x, foot0_y, foot1_x, foot1_y, foot2_x, foot2_y, foot3_x, foot3_y, foot0_mag, foot1_mag, foot2_mag, foot3_mag
+        
+        For past n observations (second dimension should always be 1 for this)
+        '''
+        self.n_history = 20
+        self.obs_scale = np.array([10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 1, 1, 1, 1])
+        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(self.n_history,1,self.obs_scale.shape[0]), dtype=np.float32)
+        self.lstm_state = np.zeros((self.n_history, 1, self.obs_scale.shape[0]), dtype=np.float32)
         
         self.link_idx_lookup = {0:'AR', 1:'AL', 2:'BL', 3:'BR'}
         self.max_foot_step_size = 0.08 # ! remember this is here!
@@ -101,10 +112,11 @@ class MagnetoEnv (Env):
         # reward, is_terminated = self.calculate_reward(obs_raw, action) # . paraboloid landscape reward
         reward, is_terminated = self.calculate_reward(obs_raw, action, strategy="progress") # . simple progress toward goal strategy
         
-        # . Trying to close sim gap by adding in resiliency to simple sim
-        if ((self.timesteps + 1) % 100 == 0) and (self.sim_mode != "full"):
-            self.plugin.reset_leg_positions()
-            self._get_obs(format='ros')
+        # ! may want to reintriduce this, avoiding it for now
+        # # . Trying to close sim gap by adding in resiliency to simple sim
+        # if ((self.timesteps + 1) % 100 == 0) and (self.sim_mode != "full"):
+        #     self.plugin.reset_leg_positions()
+        #     self._get_obs(format='ros')
         
         # .Converting observation to format required by Gym
         obs = self.state_2_gym(obs_raw)
@@ -119,9 +131,10 @@ class MagnetoEnv (Env):
             print('-----------------')
         self.timesteps += 1
         
-        if self.sim_mode == "full":
-            obs = -1 * obs
-        return obs/10, reward, is_terminated, False, info
+        return self.lstm_state, reward, is_terminated, False, info
+        # if self.sim_mode == "full":
+        #     obs = -1 * obs
+        # return obs, reward, is_terminated, False, info
     
     def calculate_reward (self, state, action, strategy="paraboloid"):
         is_terminated:bool = False
@@ -237,11 +250,14 @@ class MagnetoEnv (Env):
             self.terminate_episode()
         self.begin_episode()
         
+        self.lstm_state = np.zeros((self.n_history, 1, self.obs_scale.shape[0]), dtype=np.float32)
         obs = self._get_obs()
         info = self._get_info()
-        if self.sim_mode == "full":
-            obs = -1 * obs
-        return obs, info
+        
+        return self.lstm_state, info
+        # if self.sim_mode == "full":
+        #     obs = -1 * obs
+        # return obs, info
     
     def begin_episode (self) -> bool:
         self.state_history = []
@@ -352,7 +368,15 @@ class MagnetoEnv (Env):
         relative_foot2 = global_to_body_frame(np.array([state.body_pose.position.x, state.body_pose.position.y]), body_yaw, np.array([state.foot2.pose.position.x, state.foot2.pose.position.y]))
         relative_foot3 = global_to_body_frame(np.array([state.body_pose.position.x, state.body_pose.position.y]), body_yaw, np.array([state.foot3.pose.position.x, state.foot3.pose.position.y]))
         
-        gym_obs = np.concatenate((relative_foot0, relative_foot1, relative_foot2, relative_foot3, relative_goal), dtype=np.float32)
+        # gym_obs = np.concatenate((relative_foot0, relative_foot1, relative_foot2, relative_foot3, relative_goal), dtype=np.float32)
+        magnetic_forces = np.array([state.foot0.magnetic_force, state.foot1.magnetic_force, state.foot2.magnetic_force, state.foot3.magnetic_force])
+        gym_obs = np.concatenate((relative_goal, relative_foot0, relative_foot1, relative_foot2, relative_foot3, magnetic_forces), dtype=np.float32)
+        gym_obs = gym_obs / self.obs_scale
+        
+        if self.sim_mode == "full":
+            gym_obs = -1 * gym_obs
+        
+        self.lstm_state = np.vstack((self.lstm_state, np.reshape(gym_obs, (1, 1, self.obs_scale.shape[0]))))[1:]
         
         return gym_obs
     

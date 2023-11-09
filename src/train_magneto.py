@@ -9,6 +9,7 @@ import numpy as np
 from stable_baselines3 import TD3
 from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
 
+# %%
 def train_ppo (env, path, rel_path, timesteps):
     # . Training    
     checkpoint_callback = CheckpointCallback(
@@ -21,9 +22,9 @@ def train_ppo (env, path, rel_path, timesteps):
     )
 
     # - Start from scratch or load specified weights
-    # model = PPO(CustomActorCriticPolicy, env, verbose=1, tensorboard_log="./magneto_tensorboard/")
+    model = PPO(CustomActorCriticPolicy, env, verbose=1, tensorboard_log="./magneto_tensorboard/")
     # model = PPO("MlpPolicy", env=env, verbose=1, tensorboard_log="./magneto_tensorboard/")
-    model = PPO.load(path + rel_path + 'breakpoint.zip', env=env, verbose=1, tensorboard_log="./magneto_tensorboard/")
+    # model = PPO.load(path + rel_path + 'breakpoint.zip', env=env, verbose=1, tensorboard_log="./magneto_tensorboard/")
     print(model.policy)
     
     # # - Training
@@ -74,20 +75,37 @@ def main ():
     # . Trying to learn SOMETHING
     path = '/home/steven/magneto_ws/outputs/'
     
-    env = MagnetoEnv(render_mode="human", sim_mode="grid", magnetic_seeds=0)
-    rel_path = 'independent_walking/dqn/custom_mlp/projection/'
+    env = MagnetoEnv(render_mode="human", sim_mode="grid", magnetic_seeds=5)
+    rel_path = 'lstm/'
     # rel_path = 'independent_walking/ppo/scaled_obs_space_body/'
     
     # . Training
-    # train_ppo(env, path, rel_path, 20000000)
+    train_ppo(env, path, rel_path, 300000)
     
     # . Evaluation
-    eval_ppo(env, path, rel_path, 10)
+    # eval_ppo(env, path, rel_path, 10)
     
     # . Test
     # test_ppo(env, path, rel_path)
 
 if __name__ == "__main__":
     main()
+
+# %%
+env = MagnetoEnv(render_mode="human", sim_mode="grid", magnetic_seeds=5)
+
+# %%
+env.reset()
+
+# %%
+for i in range(5):
+    env.reset()
+    over = False
+    while not over:
+        action = env.action_space.sample()
+        obs, rewards, over, _, _ = env.step(action)
+        print(obs.shape)
+        print(obs)
+        env.render()
 
 # %%
