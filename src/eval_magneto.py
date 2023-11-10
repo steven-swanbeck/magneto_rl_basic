@@ -27,7 +27,7 @@ def main ():
     rel_path = 'lstm/'
     
     # . Evaluation
-    eval_ppo(env, path, rel_path, 1)
+    eval_ppo(env, path, rel_path, 5)
 
 if __name__ == "__main__":
     main()

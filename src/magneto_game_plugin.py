@@ -46,8 +46,9 @@ class GamePlugin(object):
         ]
         
         self.mag_seeder = MagneticSeeder()
-        raw_map = self.mag_seeder.generate_map(magnetic_seeds)
-        self.game_background = self.mag_seeder.transform_image_into_pygame(raw_map)
+        self.num_seeds = magnetic_seeds
+        # raw_map = self.mag_seeder.generate_map(self.num_seeds)
+        # self.game_background = self.mag_seeder.transform_image_into_pygame(raw_map)
     
     def report_state (self):
         # TODO make sure magnetism is being reported properly
@@ -115,6 +116,8 @@ class GamePlugin(object):
         self.heading = 0
         self.spawn_robot()
         _, self.heading = self.calculate_body_pose()
+        raw_map = self.mag_seeder.generate_map(self.num_seeds)
+        self.game_background = self.mag_seeder.transform_image_into_pygame(raw_map)
 
     def end_sim_episode (self) -> bool:
         # ? should this be here?
