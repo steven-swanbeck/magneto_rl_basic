@@ -47,6 +47,8 @@ class MagnetoEnv (Env):
         self.link_idx_lookup = {0:'AR', 1:'AL', 2:'BL', 3:'BR'}
         self.max_foot_step_size = 0.08 # ! remember this is here!
         
+        self.max_timesteps = 1000
+        
         self.state_history = []
         self.action_history = []
         self.is_episode_running = False
@@ -97,7 +99,12 @@ class MagnetoEnv (Env):
             print('-----------------')
         self.timesteps += 1
         
-        return self.lstm_state, reward, is_terminated, False, info
+        truncated = False
+        if self.timesteps > self.max_timesteps:
+            truncated = True
+            is_terminated = True
+        
+        return self.lstm_state, reward, is_terminated, truncated, info
         # return obs, reward, is_terminated, False, info
     
     def calculate_reward (self, state, action, strategy="paraboloid"):

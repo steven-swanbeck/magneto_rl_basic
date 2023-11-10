@@ -45,7 +45,7 @@ def train_ppo (env, path, rel_path, timesteps):
 def main ():
     path = '/home/steven/magneto_ws/outputs/'
     env = MagnetoEnv(render_mode="human", sim_mode="grid", magnetic_seeds=5)
-    rel_path = 'lstm/'
+    rel_path = 'bandwidth/'
     
     # . Training
     train_ppo(env, path, rel_path, 300000)
