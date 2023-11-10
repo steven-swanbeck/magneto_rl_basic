@@ -17,7 +17,7 @@ def main ():
     
     env = MagnetoEnv()
     # env = SimpleMagnetoEnv(sim_mode="grid")
-    rel_path = 'independent_walking/'
+    rel_path = 'server/'
     
     # model = PPO("MlpPolicy", env=env, verbose=1, tensorboard_log="./magneto_tensorboard/")
     # $ tensorboard --logdir /home/steven/magneto_tensorboard/
@@ -33,7 +33,8 @@ def main ():
     
     # - Loading specified weights
     # model = PPO("MlpPolicy", env=env, verbose=1)
-    model = PPO.load(path + rel_path + 'breakpoint.zip', env=env)
+    # model = PPO.load(path + rel_path + 'breakpoint.zip', env=env)
+    model = PPO.load(path + rel_path + 'magneto_4200000_steps.zip', env=env)
     # model = PPO.load(path + rel_path + 'good0.5.zip', env=env)
     
     # reward_mean, reward_std = evaluate_policy(model, env, n_eval_episodes=10)

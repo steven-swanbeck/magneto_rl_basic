@@ -38,6 +38,12 @@ class GamePlugin(object):
         self.goal = np.array([1, 1]) # !
         self.heading = 0
         self.tolerable_foot_displacement = np.array([0.08, 0.35])
+        self.tolerable_foot_angles = [
+            np.array([-2.0944, 0.5236]),
+            np.array([-0.5236, 2.0944]),
+            np.array([1.0472, 3.6652]),
+            np.array([2.6180, 5.23599]),
+        ]
         
         self.mag_seeder = MagneticSeeder()
         raw_map = self.mag_seeder.generate_map(magnetic_seeds)
@@ -52,6 +58,29 @@ class GamePlugin(object):
     def update_goal (self, goal):
         self.goal = goal
     
+    def verify_foot_position (self, id:int):
+        # - if distance is too large or small, replace it with a new position that satisfies the constraints
+        # TODO make sure this doesn't mutate valid inputs
+        # - making sure angle is set in range
+        angle = np.arctan2(self.foot_poses[id].position.y, self.foot_poses[id].position.x)
+        if (id == 2) or (id == 3):
+            if angle < 0:
+                angle = angle + 2 * np.pi
+        if angle < self.tolerable_foot_angles[id][0]:
+            angle = self.tolerable_foot_angles[id][0]
+        elif angle > self.tolerable_foot_angles[id][1]:
+            angle = self.tolerable_foot_angles[id][1]
+    
+        # - making sure distance is in range
+        norm = np.linalg.norm(np.array([self.foot_poses[id].position.x, self.foot_poses[id].position.y]), 2)
+        if norm > self.tolerable_foot_displacement[1]:
+            norm = self.tolerable_foot_displacement[1]
+        elif norm < self.tolerable_foot_displacement[0]:
+            norm = self.tolerable_foot_displacement[0]
+        
+        self.foot_poses[id].position.x = norm * np.cos(angle)
+        self.foot_poses[id].position.y = norm * np.sin(angle)
+    
     # WIP
     def update_action (self, link_id:str, pose:Pose) -> bool:
         update = body_to_global_frame(self.heading, np.array([pose.position.x, pose.position.y]))
@@ -60,6 +89,9 @@ class GamePlugin(object):
         # print(f'to: {self.foot_poses[self.link_idx[link_id]].position.x + update[0]}, {self.foot_poses[self.link_idx[link_id]].position.y + update[1]}')
         self.foot_poses[self.link_idx[link_id]].position.x += update[0] # ? switching these to try to better correspond with the full sim
         self.foot_poses[self.link_idx[link_id]].position.y += update[1]
+        
+        # ! making legs not go past allowable bandwidth
+        self.verify_foot_position(self.link_idx[link_id])
         
         for ii in range(len(self.foot_mags)):
             self.foot_mags[ii] = self.mag_seeder.lookup_magnetism_modifier(np.array([self.foot_poses[ii].position.x, self.foot_poses[ii].position.y]))
@@ -205,16 +237,17 @@ class GamePlugin(object):
         if (np.abs(self.body_pose.position.x) > self.wall_size) or (np.abs(self.body_pose.position.y > self.wall_size)):
             return True
         
+        # ! disabling this for now (kind of accounted for by progress constraints in update_action), so now only way to register fall is magnetic forces (or if robot is off wall)
         # # - Check if all feet are within spatial "bandwidth"
-        body_pos = np.array([self.body_pose.position.x, self.body_pose.position.y])
-        feet_pos = [np.array([self.foot_poses[ii].position.x, self.foot_poses[ii].position.y]) for ii in range(len(self.foot_poses))]
-        feet_pos_b = []
+        # body_pos = np.array([self.body_pose.position.x, self.body_pose.position.y])
+        # feet_pos = [np.array([self.foot_poses[ii].position.x, self.foot_poses[ii].position.y]) for ii in range(len(self.foot_poses))]
+        # feet_pos_b = []
         
-        for ii in range(len(feet_pos)):
-            feet_pos_b.append(body_to_global_frame(self.heading, feet_pos[ii] - body_pos))
+        # for ii in range(len(feet_pos)):
+        #     feet_pos_b.append(body_to_global_frame(self.heading, feet_pos[ii] - body_pos))
         
-        if self.outside_bandwidth(feet_pos_b):
-            return True
+        # if self.outside_bandwidth(feet_pos_b):
+        #     return True
         
         if not self.verify_magnetic_integrity():
             return True

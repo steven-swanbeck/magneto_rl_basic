@@ -39,6 +39,7 @@ def train_ppo (env, path, rel_path, timesteps):
         env.close()
         
     finally:
+        # pass
         model.save(path + rel_path + 'breakpoint.zip')
 
 def main ():

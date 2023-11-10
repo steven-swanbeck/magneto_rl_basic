@@ -29,43 +29,9 @@ class MagnetoEnv (Env):
             self.plugin = GamePlugin(render_mode, self.metadata["render_fps"], magnetic_seeds)
             self.render_mode = render_mode
         
-        # act_low = np.array([-1, -1, -1, -1, -1, -1])
-        # act_high = np.array([1, 1, 1, 1, 1, 1])
-        # self.action_space = spaces.Box(low=act_low, high=act_high, dtype=np.float32)
-        
-        # four legs, 5 values associated with step sizes (0.08, 0.04, 0.00, -0.04, -0.08)
+        # - four legs, 5 values associated with step sizes (0.08, 0.04, 0.00, -0.04, -0.08)
         self.action_space = spaces.MultiDiscrete([4, 5, 5])
         self.action_map = {0:0.08, 1:0.04, 2:0.02, 3:0.0, 4:-0.02, 5:-0.04, 6:-0.08}
-        
-        # x_min_global = -10./10 # +
-        # x_max_global = 10./10 # +
-        # yaw_min = -np.pi
-        # y_min_global = -10./10 # +
-        # y_max_global = 10./10 # +
-        # goal_min_x = -5.
-        # goal_max_x = 5.
-        # yaw_max = np.pi
-        # goal_min_y = -5.
-        # goal_max_y = 5.
-        # mag_min = 0.
-        # mag_max = 1.
-        
-        # # TODO figure out how I want to add the magnetism (whole robot or legs? maybe projection in front of it?)
-        # obs_low = np.array([
-        #     x_min_global, y_min_global,
-        #     x_min_global, y_min_global,
-        #     x_min_global, y_min_global,
-        #     x_min_global, y_min_global,
-        #     x_min_global, y_min_global,
-        # ])
-        # obs_high = np.array([
-        #     x_max_global, y_max_global,
-        #     x_max_global, y_max_global,
-        #     x_max_global, y_max_global,
-        #     x_max_global, y_max_global,
-        #     x_max_global, y_max_global,
-        # ])
-        # self.observation_space = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
         
         '''
         This is currently:
@@ -132,8 +98,6 @@ class MagnetoEnv (Env):
         self.timesteps += 1
         
         return self.lstm_state, reward, is_terminated, False, info
-        # if self.sim_mode == "full":
-        #     obs = -1 * obs
         # return obs, reward, is_terminated, False, info
     
     def calculate_reward (self, state, action, strategy="paraboloid"):
@@ -141,7 +105,7 @@ class MagnetoEnv (Env):
         
         if self.has_fallen(state):
             is_terminated = True
-            reward = -1
+            reward = -10
             # print(f'Fall detected! Reward set to {reward}')
         elif self.at_goal(state):
             is_terminated = True
@@ -255,8 +219,6 @@ class MagnetoEnv (Env):
         info = self._get_info()
         
         return self.lstm_state, info
-        # if self.sim_mode == "full":
-        #     obs = -1 * obs
         # return obs, info
     
     def begin_episode (self) -> bool:
@@ -314,7 +276,9 @@ class MagnetoEnv (Env):
         return False
 
     def get_foot_from_action (self, x):
+        # - one-hot encoded values
         return np.argmax(x)
+        # - single continuous value
         # if x > 0.5:
         #     return 3
         # if x > 0.0:
