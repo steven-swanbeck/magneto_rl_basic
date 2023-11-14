@@ -116,7 +116,7 @@ class GamePlugin(object):
         self.heading = 0
         self.spawn_robot()
         _, self.heading = self.calculate_body_pose()
-        raw_map = self.mag_seeder.generate_map(self.num_seeds)
+        raw_map, self.seed_locations = self.mag_seeder.generate_map(self.num_seeds)
         self.game_background = self.mag_seeder.transform_image_into_pygame(raw_map)
 
     def end_sim_episode (self) -> bool:

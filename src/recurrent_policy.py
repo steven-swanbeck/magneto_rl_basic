@@ -78,7 +78,7 @@ def main ():
     
     # . Training
     # train_ppo(env, path, rel_path, 20000000)
-    train_ppo(env, path, rel_path, 15000000)
+    train_ppo(env, path, rel_path, 100000)
     # train_ppo(vec_env, path, rel_path, 100000)
     
 

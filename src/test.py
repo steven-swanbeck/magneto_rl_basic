@@ -110,3 +110,15 @@ walk_order = np.random.permutation(legs)
 print(walk_order)
 
 # %%
+import numpy as np
+
+class gaussian (object):
+    def __init__(self, origin:np.array, sigma:float) -> None:
+        self.x0 = origin[0]
+        self.y0 = origin[1]
+        self.sigma = sigma
+    
+    def eval (self, location:np.array) -> float:
+        return (1 / (2 * np.pi * self.sigma**2)) * np.exp(-1 * ((location[0] - self.x0)**2 + (location[1] - self.y0)**2) / (2 * self.sigma**2))
+
+# %%

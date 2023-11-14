@@ -153,7 +153,13 @@ class MagnetoEnv (Env):
                 #     curr = np.array([state.foot2.pose.position.x, state.foot2.pose.position.y])
                 # elif action.idx == 3:
                 #     curr = np.array([state.foot3.pose.position.x, state.foot3.pose.position.y])
-                reward = -1 * 0.01 * self.reward_paraboloid.eval(curr)
+                paraboloid_scaling_factor = 0.01
+                reward = -1 * paraboloid_scaling_factor * self.reward_paraboloid.eval(curr)
+                # TODO loop create rewards around each seed location to try to help keep the robot away from them
+                gaussian_scaling_factor = 1
+                for ii in range(len(self.reward_gaussians)):
+                    reward += -1 * gaussian_scaling_factor * self.reward_gaussians[ii].eval(curr)
+                
             
             elif strategy == "progress":
                 reward = self.proximity_reward(state, action, multipliers=[1.5, 1.]) # multipliers are for negative and positive progress, respectively
@@ -268,7 +274,12 @@ class MagnetoEnv (Env):
         if (self.render_mode == "rgb_array") or (self.render_mode == "human"):
             self.plugin.update_goal(self.goal)
         # print(f'Sim initialized with a goal postion of {self.goal}')
-        return self.plugin.begin_sim_episode()
+        # return self.plugin.begin_sim_episode()
+        self.plugin.begin_sim_episode()
+        self.reward_gaussians = []
+        for ii in range(len(self.plugin.seed_locations)):
+            self.reward_gaussians.append(gaussian(self.plugin.seed_locations[ii], 0.6))
+        return True
 
     def terminate_episode (self) -> bool:
         self.is_episode_running = False

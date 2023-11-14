@@ -26,7 +26,12 @@ class MagneticSeeder (object):
         map = self.clip_map(seeded_image)
         
         self.map = self.convert_mask_to_image(map)
-        return self.map
+        
+        converted_seeds = []
+        for ii in range(len(seed_locations)):
+            converted_seeds.append(self.image_to_cartesian_coordinates(seed_locations[ii]))
+        
+        return self.map, converted_seeds
         
     def seed_gaussian_decay (self, image, seeds):
         for seed in seeds:
@@ -88,6 +93,13 @@ class MagneticSeeder (object):
                 output[ii] = 499
         return output
     
+    def image_to_cartesian_coordinates (self, coords):
+        output = np.array([
+            (2 * self.wall_width / self.im_height) * (coords[0] - self.im_height / 2),
+            (2 * self.wall_height / self.im_width) * (coords[1] - self.im_width / 2),
+        ])
+        return output
+    
     def cartesian_to_pygame_coordinates (self, coords):
         output = np.array([
             int(coords[1] * (self.im_width / (2 * self.wall_width)) + self.im_width / 2),
@@ -134,4 +146,16 @@ class MagneticSeeder (object):
 # value = seeder.lookup_magnetism_modifier(coords)
 # print(value)
 
+# # %%
+# # %%
+# seeder = MagneticSeeder()
+# map, seeds = seeder.generate_map()
+# # %%
+# converted_seeds = []
+# for ii in range(len(seeds)):
+#     converted_seeds.append(seeder.image_to_cartesian_coordinates(seeds[ii]))
+
+# # %%
+# test = seeder.image_to_cartesian_coordinates(np.array([500, 500]))
+# print(test)
 # # %%
