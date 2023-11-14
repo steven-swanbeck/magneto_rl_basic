@@ -95,4 +95,18 @@ print(point)
 
 print(np.arctan2(y, x))
 print(np.linalg.norm(point))
+
+# %%
+import numpy as np
+
+test = np.array([1, 2, 3, 4])
+deleted = np.delete(test, 0)
+print(deleted)
+
+# %%
+action_idx = 1
+legs = np.delete(np.array([0, 1, 2, 3]), action_idx)
+walk_order = np.random.permutation(legs)
+print(walk_order)
+
 # %%

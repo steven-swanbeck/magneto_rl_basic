@@ -91,8 +91,8 @@ class GamePlugin(object):
         self.foot_poses[self.link_idx[link_id]].position.x += update[0] # ? switching these to try to better correspond with the full sim
         self.foot_poses[self.link_idx[link_id]].position.y += update[1]
         
-        # ! making legs not go past allowable bandwidth
-        self.verify_foot_position(self.link_idx[link_id])
+        # ! making legs not go past allowable bandwidth (disabling for leader-follower env)
+        # self.verify_foot_position(self.link_idx[link_id])
         
         for ii in range(len(self.foot_mags)):
             self.foot_mags[ii] = self.mag_seeder.lookup_magnetism_modifier(np.array([self.foot_poses[ii].position.x, self.foot_poses[ii].position.y]))

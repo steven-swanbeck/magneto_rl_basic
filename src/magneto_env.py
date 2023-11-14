@@ -30,8 +30,15 @@ class MagnetoEnv (Env):
             self.render_mode = render_mode
         
         # - four legs, 5 values associated with step sizes (0.08, 0.04, 0.00, -0.04, -0.08)
-        self.action_space = spaces.MultiDiscrete([4, 5, 5])
-        self.action_map = {0:0.08, 1:0.04, 2:0.02, 3:0.0, 4:-0.02, 5:-0.04, 6:-0.08}
+        # self.action_space = spaces.MultiDiscrete([4, 5, 5])
+        # self.action_space = spaces.MultiDiscrete([5, 5])
+        # self.action_map = {0:0.08, 1:0.04, 2:0.02, 3:0.0, 4:-0.02, 5:-0.04, 6:-0.08}
+        # &
+        # act_low = np.array([-1, -1])
+        # act_high = np.array([1, 1])
+        act_low = np.array([-1, -1, -1])
+        act_high = np.array([1, 1, 1])
+        self.action_space = spaces.Box(low=act_low, high=act_high, dtype=np.float32)
         
         '''
         This is currently:
@@ -39,22 +46,33 @@ class MagnetoEnv (Env):
         
         For past n observations (second dimension should always be 1 for this)
         '''
-        self.n_history = 20
-        self.obs_scale = np.array([10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 1, 1, 1, 1])
-        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(self.n_history,1,self.obs_scale.shape[0]), dtype=np.float32)
-        self.lstm_state = np.zeros((self.n_history, 1, self.obs_scale.shape[0]), dtype=np.float32)
+        # self.n_history = 1
+        # self.obs_scale = np.array([10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 1, 1, 1, 1])
+        # self.obs_scale = np.array([10, 10, 10, 10, 10, 10, 10, 10, 10, 10]) # ! removing magnetism for now
+        # self.obs_scale = np.array([10, 10, 1, 1, 1, 1]) # ! using only goal and magnetism for now
+        # self.obs_scale = np.array([10, 10]) # ! using only goal and magnetism for now
+        # self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(self.n_history,1,self.obs_scale.shape[0]), dtype=np.float32)
+        # self.lstm_state = np.zeros((self.n_history, 1, self.obs_scale.shape[0]), dtype=np.float32)
+        
+        obs_low = np.array([
+            -10, -10, 0, 0, 0, 0,
+        ])
+        obs_high = np.array([
+            10, 10, 1, 1, 1, 1
+        ])
+        self.observation_space = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
         
         self.link_idx_lookup = {0:'AR', 1:'AL', 2:'BL', 3:'BR'}
         self.max_foot_step_size = 0.08 # ! remember this is here!
         
-        self.max_timesteps = 1000
+        self.max_timesteps = 5000
         
         self.state_history = []
         self.action_history = []
         self.is_episode_running = False
         self.screenshots = []
     
-    def step (self, gym_action, check_status:bool=True):
+    def step (self, gym_action):
         self.state_history.append(MagnetoState(deepcopy(self.plugin.report_state())))
         
         # . Converting action from Gym format to one used by ROS plugin and other class members
@@ -63,13 +81,17 @@ class MagnetoEnv (Env):
         
         # . Taking specified action
         success = self.plugin.update_action(self.link_idx_lookup[action.idx], action.pose)
+        # .make permutation of remaining three legs
+        legs = np.delete(np.array([0, 1, 2, 3]), action.idx)
+        walk_order = np.random.permutation(legs)
+        success = self.plugin.update_action(self.link_idx_lookup[walk_order[0]], action.pose)
+        success = self.plugin.update_action(self.link_idx_lookup[walk_order[1]], action.pose)
+        success = self.plugin.update_action(self.link_idx_lookup[walk_order[2]], action.pose)
+        
         # walk_order = np.random.permutation([0, 1, 2, 3])
         # success = self.plugin.update_action(self.link_idx_lookup[walk_order[0]], action.pose)
-        # # self.screenshot()
         # success = self.plugin.update_action(self.link_idx_lookup[walk_order[1]], action.pose)
-        # # self.screenshot()
         # success = self.plugin.update_action(self.link_idx_lookup[walk_order[2]], action.pose)
-        # # self.screenshot()
         # success = self.plugin.update_action(self.link_idx_lookup[walk_order[3]], action.pose)
         
         # . Observation and info
@@ -77,12 +99,12 @@ class MagnetoEnv (Env):
         info = self._get_info()
         
         # . Termination determination
-        # reward, is_terminated = self.calculate_reward(obs_raw, action) # . paraboloid landscape reward
-        reward, is_terminated = self.calculate_reward(obs_raw, action, strategy="progress") # . simple progress toward goal strategy
+        reward, is_terminated = self.calculate_reward(obs_raw, action) # . paraboloid landscape reward
+        # reward, is_terminated = self.calculate_reward(obs_raw, action, strategy="progress") # . simple progress toward goal strategy
         
         # ! may want to reintriduce this, avoiding it for now
-        # # . Trying to close sim gap by adding in resiliency to simple sim
-        # if ((self.timesteps + 1) % 100 == 0) and (self.sim_mode != "full"):
+        # # # . Trying to close sim gap by adding in resiliency to simple sim
+        # if ((self.timesteps + 1) % 50 == 0) and (self.sim_mode != "full"):
         #     self.plugin.reset_leg_positions()
         #     self._get_obs(format='ros')
         
@@ -104,31 +126,31 @@ class MagnetoEnv (Env):
             truncated = True
             is_terminated = True
         
-        return self.lstm_state, reward, is_terminated, truncated, info
-        # return obs, reward, is_terminated, False, info
+        # return self.lstm_state, reward, is_terminated, truncated, info
+        return obs, reward, is_terminated, False, info
     
     def calculate_reward (self, state, action, strategy="paraboloid"):
         is_terminated:bool = False
         
         if self.has_fallen(state):
             is_terminated = True
-            reward = -10
+            reward = -1000
             # print(f'Fall detected! Reward set to {reward}')
         elif self.at_goal(state):
             is_terminated = True
-            reward = 10
+            reward = 1000
             # print(f'Reached goal! Reward set to {reward}')
         else:
             if strategy == "paraboloid":
-                # curr = np.array([state.body_pose.position.x, state.body_pose.position.y])
-                if action.idx == 0:
-                    curr = np.array([state.foot0.pose.position.x, state.foot0.pose.position.y])
-                elif action.idx == 1:
-                    curr = np.array([state.foot1.pose.position.x, state.foot1.pose.position.y])
-                elif action.idx == 2:
-                    curr = np.array([state.foot2.pose.position.x, state.foot2.pose.position.y])
-                elif action.idx == 3:
-                    curr = np.array([state.foot3.pose.position.x, state.foot3.pose.position.y])
+                curr = np.array([state.body_pose.position.x, state.body_pose.position.y])
+                # if action.idx == 0:
+                #     curr = np.array([state.foot0.pose.position.x, state.foot0.pose.position.y])
+                # elif action.idx == 1:
+                #     curr = np.array([state.foot1.pose.position.x, state.foot1.pose.position.y])
+                # elif action.idx == 2:
+                #     curr = np.array([state.foot2.pose.position.x, state.foot2.pose.position.y])
+                # elif action.idx == 3:
+                #     curr = np.array([state.foot3.pose.position.x, state.foot3.pose.position.y])
                 reward = -1 * self.reward_paraboloid.eval(curr)
             
             elif strategy == "progress":
@@ -175,6 +197,10 @@ class MagnetoEnv (Env):
         prev_proj = np.dot(prev_foot_goal, prev_body_goal)
         curr_proj = np.dot(curr_foot_goal, curr_body_goal)
         
+        prev_dist = np.linalg.norm(prev_body_pos, 2)
+        curr_dist = np.linalg.norm(body_pos, 2)
+        
+        return prev_dist - curr_dist
         return prev_proj - curr_proj
         
         # foot_pos = np.array([state.body_pose.position.x, state.body_pose.position.y])
@@ -221,12 +247,12 @@ class MagnetoEnv (Env):
             self.terminate_episode()
         self.begin_episode()
         
-        self.lstm_state = np.zeros((self.n_history, 1, self.obs_scale.shape[0]), dtype=np.float32)
+        # self.lstm_state = np.zeros((self.n_history, 1, self.obs_scale.shape[0]), dtype=np.float32)
         obs = self._get_obs()
         info = self._get_info()
         
-        return self.lstm_state, info
-        # return obs, info
+        # return self.lstm_state, info
+        return obs, info
     
     def begin_episode (self) -> bool:
         self.state_history = []
@@ -284,28 +310,29 @@ class MagnetoEnv (Env):
 
     def get_foot_from_action (self, x):
         # - one-hot encoded values
-        return np.argmax(x)
+        # return np.argmax(x)
         # - single continuous value
-        # if x > 0.5:
-        #     return 3
-        # if x > 0.0:
-        #     return 2
-        # if x < -0.5:
-        #     return 0
-        # return 1
+        if x > 0.5:
+            return 3
+        if x > 0.0:
+            return 2
+        if x < -0.5:
+            return 0
+        return 1
 
-    # def gym_2_action (self, gym_action:np.array) -> MagnetoAction:
-    #     action = MagnetoAction()
-    #     action.pose.position.x = self.max_foot_step_size * gym_action[0]
-    #     action.pose.position.y = self.max_foot_step_size * gym_action[1]
-    #     action.idx = self.get_foot_from_action(gym_action[2:6])
-    #     return action
-    def gym_2_action (self, gym_action) -> MagnetoAction:
+    def gym_2_action (self, gym_action:np.array) -> MagnetoAction:
         action = MagnetoAction()
-        action.idx = gym_action[0]
-        action.pose.position.x = self.action_map[gym_action[1]]
-        action.pose.position.y = self.action_map[gym_action[2]]
+        action.idx = self.get_foot_from_action(gym_action[0])
+        action.pose.position.x = self.max_foot_step_size * gym_action[1]
+        action.pose.position.y = self.max_foot_step_size * gym_action[2]
+        # action.idx = self.get_foot_from_action(gym_action[2:6])
         return action
+    # def gym_2_action (self, gym_action) -> MagnetoAction:
+    #     action = MagnetoAction()
+    #     action.idx = gym_action[0]
+    #     action.pose.position.x = self.action_map[gym_action[1]]
+    #     action.pose.position.y = self.action_map[gym_action[2]]
+    #     return action
     
     def state_2_gym (self, state:MagnetoState) -> np.array:
         _, _, body_yaw = euler_from_quaternion(state.body_pose.orientation.w, state.body_pose.orientation.x, state.body_pose.orientation.y, state.body_pose.orientation.z)
@@ -341,13 +368,18 @@ class MagnetoEnv (Env):
         
         # gym_obs = np.concatenate((relative_foot0, relative_foot1, relative_foot2, relative_foot3, relative_goal), dtype=np.float32)
         magnetic_forces = np.array([state.foot0.magnetic_force, state.foot1.magnetic_force, state.foot2.magnetic_force, state.foot3.magnetic_force])
-        gym_obs = np.concatenate((relative_goal, relative_foot0, relative_foot1, relative_foot2, relative_foot3, magnetic_forces), dtype=np.float32)
-        gym_obs = gym_obs / self.obs_scale
+        # gym_obs = np.concatenate((relative_goal, relative_foot0, relative_foot1, relative_foot2, relative_foot3, magnetic_forces), dtype=np.float32)
+        gym_obs = np.concatenate((relative_goal, magnetic_forces), dtype=np.float32)
+        # gym_obs = gym_obs / self.obs_scale
+        
+        # gym_obs = np.array([
+        #     relative_goal[0], relative_goal[1],
+        # ], dtype=np.float32)
         
         if self.sim_mode == "full":
             gym_obs = -1 * gym_obs
         
-        self.lstm_state = np.vstack((self.lstm_state, np.reshape(gym_obs, (1, 1, self.obs_scale.shape[0]))))[1:]
+        # self.lstm_state = np.vstack((self.lstm_state, np.reshape(gym_obs, (1, 1, self.obs_scale.shape[0]))))[1:]
         
         return gym_obs
     

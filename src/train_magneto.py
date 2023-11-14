@@ -18,8 +18,8 @@ def train_ppo (env, path, rel_path, timesteps):
     )
 
     # - Start from scratch or load specified weights
-    model = PPO(CustomActorCriticPolicy, env, verbose=1, tensorboard_log="./magneto_tensorboard/")
-    # model = PPO("MlpPolicy", env=env, verbose=1, tensorboard_log="./magneto_tensorboard/")
+    # model = PPO(CustomActorCriticPolicy, env, verbose=1, tensorboard_log="./magneto_tensorboard/")
+    model = PPO("MlpPolicy", env=env, verbose=1, tensorboard_log="./magneto_tensorboard/")
     # model = PPO.load(path + rel_path + 'breakpoint.zip', env=env, verbose=1, tensorboard_log="./magneto_tensorboard/")
     print(model.policy)
     
@@ -45,10 +45,11 @@ def train_ppo (env, path, rel_path, timesteps):
 def main ():
     path = '/home/steven/magneto_ws/outputs/'
     env = MagnetoEnv(render_mode="human", sim_mode="grid", magnetic_seeds=5)
-    rel_path = 'bandwidth/'
+    rel_path = 'leader-follower/no_magnetic_seeds/2_seeding_magnetism/'
     
     # . Training
-    train_ppo(env, path, rel_path, 300000)
+    # train_ppo(env, path, rel_path, 20000000)
+    train_ppo(env, path, rel_path, 100000)
 
 if __name__ == "__main__":
     main()
