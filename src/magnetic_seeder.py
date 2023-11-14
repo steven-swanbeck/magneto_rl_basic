@@ -62,6 +62,7 @@ class MagneticSeeder (object):
         return clip
     
     def convert_mask_to_image (self, image):
+        self.single_channel_map = image
         blank_image = np.zeros((image.shape[0], image.shape[1], 3), dtype=np.uint8)
         blank_image[:,:,0] = image
         blank_image[:,:,1] = image

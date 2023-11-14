@@ -56,9 +56,11 @@ class MagnetoEnv (Env):
         
         obs_low = np.array([
             -10, -10, 0, 0, 0, 0,
+            # -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, 0, 0, 0, 0,
         ])
         obs_high = np.array([
             10, 10, 1, 1, 1, 1
+            # 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 1, 1, 1, 1
         ])
         self.observation_space = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
         
@@ -151,11 +153,12 @@ class MagnetoEnv (Env):
                 #     curr = np.array([state.foot2.pose.position.x, state.foot2.pose.position.y])
                 # elif action.idx == 3:
                 #     curr = np.array([state.foot3.pose.position.x, state.foot3.pose.position.y])
-                reward = -1 * self.reward_paraboloid.eval(curr)
+                reward = -1 * 0.01 * self.reward_paraboloid.eval(curr)
             
             elif strategy == "progress":
                 reward = self.proximity_reward(state, action, multipliers=[1.5, 1.]) # multipliers are for negative and positive progress, respectively
         
+        # reward -= 1
         return reward, is_terminated
     
     def proximity_reward (self, state, action, multipliers):
