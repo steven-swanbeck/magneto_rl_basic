@@ -4,6 +4,7 @@ import numpy as np
 from magneto_utils import *
 from magnetic_seeder import MagneticSeeder
 import pygame
+import cv2
 
 class GamePlugin(object):
     
@@ -116,8 +117,15 @@ class GamePlugin(object):
         self.heading = 0
         self.spawn_robot()
         _, self.heading = self.calculate_body_pose()
-        raw_map, self.seed_locations = self.mag_seeder.generate_map(self.num_seeds)
-        self.game_background = self.mag_seeder.transform_image_into_pygame(raw_map)
+        self.raw_map, self.seed_locations, self.single_channel_map = self.mag_seeder.generate_map(self.num_seeds)
+        self.game_background = self.mag_seeder.transform_image_into_pygame(self.raw_map)
+        
+    def paint_robot_and_goal (self, robot, goal):
+        goal_pixels = self.mag_seeder.cartesian_to_image_coordinates(goal)
+        robot_pixels = self.mag_seeder.cartesian_to_image_coordinates(robot)
+        im_circ = cv2.circle(self.raw_map, goal_pixels, radius=20, color=(0, 255, 0), thickness=-1)
+        im_goal = cv2.circle(im_circ, robot_pixels, radius=20, color=(100, 100, 100), thickness=-1)
+        return im_goal
 
     def end_sim_episode (self) -> bool:
         # ? should this be here?

@@ -122,3 +122,39 @@ class gaussian (object):
         return (1 / (2 * np.pi * self.sigma**2)) * np.exp(-1 * ((location[0] - self.x0)**2 + (location[1] - self.y0)**2) / (2 * self.sigma**2))
 
 # %%
+from stable_baselines3 import PPO
+from stable_baselines3.common.envs import SimpleMultiObsEnv
+
+
+# Stable Baselines provides SimpleMultiObsEnv as an example environment with Dict observations
+env = SimpleMultiObsEnv(random_start=False)
+
+# %%
+model = PPO("MultiInputPolicy", env, verbose=1)
+
+# %%
+model.learn(total_timesteps=100_000)
+
+# %%
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+im = cv2.imread('labeled_objects.png')
+
+# %%
+robot = np.array([120, 100])
+goal = np.array([200, 250])
+im_robot = cv2.circle(im, robot, radius=30, color=(0, 0, 255), thickness=-1)
+im_goal = cv2.circle(im_robot, goal, radius=30, color=(0, 255, 0), thickness=-1)
+plt.imshow(im_goal)
+
+# %%
+# TODO try to crop out the subset of the image closest to the robot
+res = 100
+crop_img = im_goal[robot[1] - res:robot[1] + res, robot[0] - res:robot[0] + res]
+
+# %%
+plt.imshow(crop_img)
+
+# %%

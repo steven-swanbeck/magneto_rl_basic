@@ -31,7 +31,7 @@ class MagneticSeeder (object):
         for ii in range(len(seed_locations)):
             converted_seeds.append(self.image_to_cartesian_coordinates(seed_locations[ii]))
         
-        return self.map, converted_seeds
+        return self.map, converted_seeds, map.astype(np.uint8)
         
     def seed_gaussian_decay (self, image, seeds):
         for seed in seeds:
@@ -91,6 +91,8 @@ class MagneticSeeder (object):
         for ii in range(2):
             if output[ii] > 499:
                 output[ii] = 499
+            elif output[ii] < 0:
+                output[ii] = 0
         return output
     
     def image_to_cartesian_coordinates (self, coords):
@@ -149,7 +151,7 @@ class MagneticSeeder (object):
 # # %%
 # # %%
 # seeder = MagneticSeeder()
-# map, seeds = seeder.generate_map()
+# map, seeds, simple_map = seeder.generate_map()
 # # %%
 # converted_seeds = []
 # for ii in range(len(seeds)):

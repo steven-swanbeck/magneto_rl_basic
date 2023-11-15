@@ -62,7 +62,23 @@ class MagnetoEnv (Env):
             10, 10, 1, 1, 1, 1
             # 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 1, 1, 1, 1
         ])
-        self.observation_space = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
+        # self.observation_space = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
+        
+        # self.observation_space = spaces.Dict({
+        #     'goal': spaces.Box(low=-10, high=10, shape=(2,)),
+        #     'magnetism': spaces.Box(low=0, high=1, shape=(4,)),
+        #     'location': spaces.Box(low=0, high=500, shape=(2,)),
+        #     'img': spaces.Box(low=0, high=255, shape=(500, 500, 1), dtype=np.uint8),
+        # })
+        
+        # self.observation_space = spaces.Box(low=0, high=255, shape=(500, 500, 3), dtype=np.uint8)
+        
+        self.observation_space = spaces.Dict({
+            'goal': spaces.Box(low=-10, high=10, shape=(2,)),
+            'magnetism': spaces.Box(low=0, high=1, shape=(4,)),
+            'location': spaces.Box(low=0, high=500, shape=(2,)),
+            'img': spaces.Box(low=0, high=255, shape=(500, 500, 1), dtype=np.uint8),
+        })
         
         self.link_idx_lookup = {0:'AR', 1:'AL', 2:'BL', 3:'BR'}
         self.max_foot_step_size = 0.08 # ! remember this is here!
@@ -156,9 +172,9 @@ class MagnetoEnv (Env):
                 paraboloid_scaling_factor = 0.01
                 reward = -1 * paraboloid_scaling_factor * self.reward_paraboloid.eval(curr)
                 # TODO loop create rewards around each seed location to try to help keep the robot away from them
-                gaussian_scaling_factor = 1
-                for ii in range(len(self.reward_gaussians)):
-                    reward += -1 * gaussian_scaling_factor * self.reward_gaussians[ii].eval(curr)
+                # gaussian_scaling_factor = 1
+                # for ii in range(len(self.reward_gaussians)):
+                #     reward += -1 * gaussian_scaling_factor * self.reward_gaussians[ii].eval(curr)
                 
             
             elif strategy == "progress":
@@ -279,6 +295,7 @@ class MagnetoEnv (Env):
         self.reward_gaussians = []
         for ii in range(len(self.plugin.seed_locations)):
             self.reward_gaussians.append(gaussian(self.plugin.seed_locations[ii], 0.6))
+        self.single_channel_map = self.plugin.single_channel_map
         return True
 
     def terminate_episode (self) -> bool:
@@ -382,16 +399,35 @@ class MagnetoEnv (Env):
         
         # gym_obs = np.concatenate((relative_foot0, relative_foot1, relative_foot2, relative_foot3, relative_goal), dtype=np.float32)
         magnetic_forces = np.array([state.foot0.magnetic_force, state.foot1.magnetic_force, state.foot2.magnetic_force, state.foot3.magnetic_force])
+        
+        if self.sim_mode == "full":
+            relative_goal = -1 * relative_goal
+        
         # gym_obs = np.concatenate((relative_goal, relative_foot0, relative_foot1, relative_foot2, relative_foot3, magnetic_forces), dtype=np.float32)
-        gym_obs = np.concatenate((relative_goal, magnetic_forces), dtype=np.float32)
+        # gym_obs = np.concatenate((relative_goal, magnetic_forces), dtype=np.float32)
         # gym_obs = gym_obs / self.obs_scale
+        
+        # TODO get body location and turn into pixel location
+        # TODO add image
+        robot_pixel_location = self.plugin.mag_seeder.cartesian_to_image_coordinates(np.array([state.body_pose.position.x, state.body_pose.position.y]))
+        goal_pixel_location = self.plugin.mag_seeder.cartesian_to_image_coordinates(self.goal)
+        gym_obs = {
+            # 'goal': relative_goal,
+            'goal': goal_pixel_location,
+            'location': robot_pixel_location,
+            'magnetism': magnetic_forces,
+            'img': self.single_channel_map.reshape(500, 500, 1),
+            # TODO consider only grabbing a small portion of the map that 
+        }
+        
+        # gym_obs = self.plugin.paint_robot_and_goal(
+        #     np.array([state.body_pose.position.x, state.body_pose.position.y]), 
+        #     self.goal,
+        # )
         
         # gym_obs = np.array([
         #     relative_goal[0], relative_goal[1],
         # ], dtype=np.float32)
-        
-        if self.sim_mode == "full":
-            gym_obs = -1 * gym_obs
         
         # self.lstm_state = np.vstack((self.lstm_state, np.reshape(gym_obs, (1, 1, self.obs_scale.shape[0]))))[1:]
         
