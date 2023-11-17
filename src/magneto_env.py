@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+
+# TODO
+# - try independent leg motions
+# - reduce paraboloid reward
+# - add negative penalty for failing to make progress (with independent foot motions)
+
 # %%
 import numpy as np
 import gymnasium as gym
@@ -38,7 +44,15 @@ class MagnetoEnv (Env):
         # act_high = np.array([1, 1])
         act_low = np.array([-1, -1, -1])
         act_high = np.array([1, 1, 1])
-        self.action_space = spaces.Box(low=act_low, high=act_high, dtype=np.float32)
+        # self.action_space = spaces.Box(low=act_low, high=act_high, dtype=np.float32)
+        
+        # self.x_step = {0:-0.4, 1:-0.2, 2:0.0, 3:0.2, 4:0.4}
+        # self.y_step = {0:-0.4, 1:-0.2, 2:0.0, 3:0.2, 4:0.4}
+        # self.action_space = spaces.Discrete(25)
+        # self.x_step = {0:-0.4, 1:-0.2, 2:-0.1, 3:0.0, 4:0.1, 5:0.2, 6:0.4}
+        self.x_step = {0:-0.08, 1:-0.04, 2:-0.02, 3:0.0, 4:0.02, 5:0.04, 6:0.08}
+        self.y_step = {0:-0.08, 1:-0.04, 2:-0.02, 3:0.0, 4:0.02, 5:0.04, 6:0.08}
+        self.action_space = spaces.Discrete(49)
         
         '''
         This is currently:
@@ -73,17 +87,22 @@ class MagnetoEnv (Env):
         
         # self.observation_space = spaces.Box(low=0, high=255, shape=(500, 500, 3), dtype=np.uint8)
         
+        # self.observation_space = spaces.Dict({
+        #     'goal': spaces.Box(low=-10, high=10, shape=(2,)),
+        #     'magnetism': spaces.Box(low=0, high=1, shape=(4,)),
+        #     'location': spaces.Box(low=0, high=500, shape=(2,)),
+        #     'img': spaces.Box(low=0, high=255, shape=(500, 500, 1), dtype=np.uint8),
+        # })
+        
         self.observation_space = spaces.Dict({
             'goal': spaces.Box(low=-10, high=10, shape=(2,)),
             'magnetism': spaces.Box(low=0, high=1, shape=(4,)),
-            'location': spaces.Box(low=0, high=500, shape=(2,)),
-            'img': spaces.Box(low=0, high=255, shape=(500, 500, 1), dtype=np.uint8),
         })
         
         self.link_idx_lookup = {0:'AR', 1:'AL', 2:'BL', 3:'BR'}
         self.max_foot_step_size = 0.08 # ! remember this is here!
         
-        self.max_timesteps = 5000
+        self.max_timesteps = 1500
         
         self.state_history = []
         self.action_history = []
@@ -97,20 +116,20 @@ class MagnetoEnv (Env):
         action = self.gym_2_action(gym_action)
         self.action_history.append(action)
         
-        # . Taking specified action
-        success = self.plugin.update_action(self.link_idx_lookup[action.idx], action.pose)
-        # .make permutation of remaining three legs
-        legs = np.delete(np.array([0, 1, 2, 3]), action.idx)
-        walk_order = np.random.permutation(legs)
-        success = self.plugin.update_action(self.link_idx_lookup[walk_order[0]], action.pose)
-        success = self.plugin.update_action(self.link_idx_lookup[walk_order[1]], action.pose)
-        success = self.plugin.update_action(self.link_idx_lookup[walk_order[2]], action.pose)
-        
-        # walk_order = np.random.permutation([0, 1, 2, 3])
+        # # . Taking specified action
+        # success = self.plugin.update_action(self.link_idx_lookup[action.idx], action.pose)
+        # # .make permutation of remaining three legs
+        # legs = np.delete(np.array([0, 1, 2, 3]), action.idx)
+        # walk_order = np.random.permutation(legs)
         # success = self.plugin.update_action(self.link_idx_lookup[walk_order[0]], action.pose)
         # success = self.plugin.update_action(self.link_idx_lookup[walk_order[1]], action.pose)
         # success = self.plugin.update_action(self.link_idx_lookup[walk_order[2]], action.pose)
-        # success = self.plugin.update_action(self.link_idx_lookup[walk_order[3]], action.pose)
+        
+        walk_order = np.random.permutation([0, 1, 2, 3])
+        success = self.plugin.update_action(self.link_idx_lookup[walk_order[0]], action.pose)
+        success = self.plugin.update_action(self.link_idx_lookup[walk_order[1]], action.pose)
+        success = self.plugin.update_action(self.link_idx_lookup[walk_order[2]], action.pose)
+        success = self.plugin.update_action(self.link_idx_lookup[walk_order[3]], action.pose)
         
         # . Observation and info
         obs_raw = self._get_obs(format='ros')
@@ -172,10 +191,9 @@ class MagnetoEnv (Env):
                 paraboloid_scaling_factor = 0.01
                 reward = -1 * paraboloid_scaling_factor * self.reward_paraboloid.eval(curr)
                 # TODO loop create rewards around each seed location to try to help keep the robot away from them
-                # gaussian_scaling_factor = 1
-                # for ii in range(len(self.reward_gaussians)):
-                #     reward += -1 * gaussian_scaling_factor * self.reward_gaussians[ii].eval(curr)
-                
+                gaussian_scaling_factor = 1
+                for ii in range(len(self.reward_gaussians)):
+                    reward += -1 * gaussian_scaling_factor * self.reward_gaussians[ii].eval(curr)
             
             elif strategy == "progress":
                 reward = self.proximity_reward(state, action, multipliers=[1.5, 1.]) # multipliers are for negative and positive progress, respectively
@@ -294,7 +312,7 @@ class MagnetoEnv (Env):
         self.plugin.begin_sim_episode()
         self.reward_gaussians = []
         for ii in range(len(self.plugin.seed_locations)):
-            self.reward_gaussians.append(gaussian(self.plugin.seed_locations[ii], 0.6))
+            self.reward_gaussians.append(gaussian(self.plugin.seed_locations[ii], 0.45)) #0.6
         self.single_channel_map = self.plugin.single_channel_map
         return True
 
@@ -353,10 +371,15 @@ class MagnetoEnv (Env):
 
     def gym_2_action (self, gym_action:np.array) -> MagnetoAction:
         action = MagnetoAction()
-        action.idx = self.get_foot_from_action(gym_action[0])
-        action.pose.position.x = self.max_foot_step_size * gym_action[1]
-        action.pose.position.y = self.max_foot_step_size * gym_action[2]
+        # action.idx = self.get_foot_from_action(gym_action[0])
+        # action.pose.position.x = self.max_foot_step_size * gym_action[1]
+        # action.pose.position.y = self.max_foot_step_size * gym_action[2]
         # action.idx = self.get_foot_from_action(gym_action[2:6])
+        
+        # action.pose.position.x = self.x_step[int(gym_action / 5)]
+        # action.pose.position.y = self.y_step[gym_action % 5]
+        action.pose.position.x = self.x_step[int(gym_action / 7)]
+        action.pose.position.y = self.y_step[gym_action % 7]
         return action
     # def gym_2_action (self, gym_action) -> MagnetoAction:
     #     action = MagnetoAction()
@@ -404,20 +427,23 @@ class MagnetoEnv (Env):
             relative_goal = -1 * relative_goal
         
         # gym_obs = np.concatenate((relative_goal, relative_foot0, relative_foot1, relative_foot2, relative_foot3, magnetic_forces), dtype=np.float32)
-        # gym_obs = np.concatenate((relative_goal, magnetic_forces), dtype=np.float32)
+        gym_obs = np.concatenate((relative_goal, magnetic_forces), dtype=np.float32)
         # gym_obs = gym_obs / self.obs_scale
         
-        # TODO get body location and turn into pixel location
-        # TODO add image
-        robot_pixel_location = self.plugin.mag_seeder.cartesian_to_image_coordinates(np.array([state.body_pose.position.x, state.body_pose.position.y]))
-        goal_pixel_location = self.plugin.mag_seeder.cartesian_to_image_coordinates(self.goal)
+        # robot_pixel_location = self.plugin.mag_seeder.cartesian_to_image_coordinates(np.array([state.body_pose.position.x, state.body_pose.position.y]))
+        # goal_pixel_location = self.plugin.mag_seeder.cartesian_to_image_coordinates(self.goal)
+        # gym_obs = {
+        #     # 'goal': relative_goal,
+        #     'goal': goal_pixel_location,
+        #     'location': robot_pixel_location,
+        #     'magnetism': magnetic_forces,
+        #     'img': self.single_channel_map.reshape(500, 500, 1),
+        #     # TODO consider only grabbing a small portion of the map that 
+        # }
+        
         gym_obs = {
-            # 'goal': relative_goal,
-            'goal': goal_pixel_location,
-            'location': robot_pixel_location,
+            'goal': relative_goal,
             'magnetism': magnetic_forces,
-            'img': self.single_channel_map.reshape(500, 500, 1),
-            # TODO consider only grabbing a small portion of the map that 
         }
         
         # gym_obs = self.plugin.paint_robot_and_goal(

@@ -2,7 +2,7 @@
 # %%
 import numpy as np
 from magneto_env import MagnetoEnv
-from stable_baselines3 import PPO
+from stable_baselines3 import DQN
 from sb3_contrib import RecurrentPPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.evaluation import evaluate_policy
@@ -43,7 +43,7 @@ def train_ppo (env, path, rel_path, timesteps):
     # - Start from scratch or load specified weights
     # model = PPO(CustomActorCriticPolicy, env, verbose=1, tensorboard_log="./magneto_tensorboard/")
     # model = PPO("MlpPolicy", env=env, verbose=1, tensorboard_log="./magneto_tensorboard/")
-    model = PPO("MultiInputPolicy", env=env, verbose=1, tensorboard_log="./magneto_tensorboard/")
+    model = DQN("MultiInputPolicy", env=env, verbose=1, tensorboard_log="./magneto_tensorboard/")
     # model = PPO.load(path + rel_path + 'breakpoint.zip', env=env, verbose=1, tensorboard_log="./magneto_tensorboard/")
     print(model.policy)
     
@@ -68,17 +68,11 @@ def train_ppo (env, path, rel_path, timesteps):
 
 def main ():
     path = '/home/steven/magneto_ws/outputs/'
-    # env = MagnetoEnv(render_mode="human", sim_mode="grid", magnetic_seeds=10)
-    # rel_path = 'leader-follower/no_magnetic_seeds/2_seeding_magnetism/'
-    rel_path = 'recurrent/leader_follower/multi_input/paraboloid_penalty/'
-    
-    num_cpu = 4
-    vec_env = SubprocVecEnv([make_env(i) for i in range(num_cpu)])
+    env = MagnetoEnv(render_mode="human", sim_mode="grid", magnetic_seeds=10)
+    rel_path = 'dqn/leader_follower/multi_input/paraboloid_penalty/'
     
     # . Training
-    # train_ppo(env, path, rel_path, 20000000)
-    # train_ppo(env, path, rel_path, 1000000)
-    train_ppo(vec_env, path, rel_path, 1000000)
+    train_ppo(env, path, rel_path, 1000000)
     
 
 # %%
