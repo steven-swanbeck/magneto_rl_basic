@@ -33,7 +33,7 @@ def train_ppo (env, path, rel_path, timesteps):
     # . Training    
     checkpoint_callback = CheckpointCallback(
         # save_freq=10,
-        save_freq=5000,
+        save_freq=200000,
         save_path=path + rel_path + 'weights/',
         name_prefix='magneto',
         save_replay_buffer=True,
@@ -69,7 +69,8 @@ def train_ppo (env, path, rel_path, timesteps):
 def main ():
     path = '/home/steven/magneto_ws/outputs/'
     env = MagnetoEnv(render_mode="human", sim_mode="grid", magnetic_seeds=10)
-    rel_path = 'dqn/leader_follower/multi_input/paraboloid_penalty/'
+    # rel_path = 'dqn/leader_follower/multi_input/paraboloid_penalty/'
+    rel_path = 'dqn/independent/multi_input/paraboloid_penalty/'
     
     # . Training
     train_ppo(env, path, rel_path, 1000000)

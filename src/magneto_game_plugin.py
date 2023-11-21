@@ -48,6 +48,7 @@ class GamePlugin(object):
         
         self.mag_seeder = MagneticSeeder()
         self.num_seeds = magnetic_seeds
+        self.foot_modified = False
         # raw_map = self.mag_seeder.generate_map(self.num_seeds)
         # self.game_background = self.mag_seeder.transform_image_into_pygame(raw_map)
     
@@ -64,21 +65,27 @@ class GamePlugin(object):
         # - if distance is too large or small, replace it with a new position that satisfies the constraints
         # TODO make sure this doesn't mutate valid inputs
         # - making sure angle is set in range
+        self.foot_modified = False
         angle = np.arctan2(self.foot_poses[id].position.y, self.foot_poses[id].position.x)
         if (id == 2) or (id == 3):
             if angle < 0:
                 angle = angle + 2 * np.pi
+                self.foot_modified = True
         if angle < self.tolerable_foot_angles[id][0]:
             angle = self.tolerable_foot_angles[id][0]
+            self.foot_modified = True
         elif angle > self.tolerable_foot_angles[id][1]:
             angle = self.tolerable_foot_angles[id][1]
+            self.foot_modified = True
     
         # - making sure distance is in range
         norm = np.linalg.norm(np.array([self.foot_poses[id].position.x, self.foot_poses[id].position.y]), 2)
         if norm > self.tolerable_foot_displacement[1]:
             norm = self.tolerable_foot_displacement[1]
+            self.foot_modified = True
         elif norm < self.tolerable_foot_displacement[0]:
             norm = self.tolerable_foot_displacement[0]
+            self.foot_modified = True
         
         self.foot_poses[id].position.x = norm * np.cos(angle)
         self.foot_poses[id].position.y = norm * np.sin(angle)

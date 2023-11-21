@@ -12,12 +12,16 @@ from magneto_rl.srv import ReportMagnetoState, ReportMagnetoStateResponse
 import roslaunch
 import time
 import pyautogui
-from seed_magnetism import MagnetismMapper
+# from seed_magnetism import MagnetismMapper
+from magnetic_seeder import MagneticSeeder
+import pygame
+import numpy as np
 
 
 class MagnetoRLPlugin (object):
     
-    def __init__(self) -> None:
+    # def __init__(self, render_mode, render_fps, magnetic_seeds=10) -> None:
+    def __init__(self, magnetic_seeds=10) -> None:
         rospy.init_node('magneto_rl_manager')
         
         self.next_step_service = rospy.Service('determine_next_step', FootPlacement, self.determine_next_step)
@@ -41,7 +45,29 @@ class MagnetoRLPlugin (object):
         
         self.vertical_pixel_calibration_offset = rospy.get_param('/magneto/simulation/vertical_pixel_calibration_offset')
         
-        self.mag_map = MagnetismMapper(rospy.get_param('/magneto/simulation/magnetism_map/wall_geometry/width'), rospy.get_param('/magneto/simulation/magnetism_map/wall_geometry/height'))
+        self.mag_seeder = MagneticSeeder()
+        self.num_seeds = magnetic_seeds
+        
+        self.wall_size = 5
+        # self.fps = render_fps
+        self.window = None
+        self.clock = None
+        self.wall_width = 5
+        self.wall_height = 5
+        self.im_width = 500
+        self.im_height = 500
+        self.window_size = 500
+        self.scale = 500 / 5 #pixels/m
+        self.heading_arrow_length = 0.2
+        self.leg_length = 0.2
+        self.body_radius = 0.08
+        self.foot_radius = 0.03
+        self.body_width = 0.2 #m
+        self.body_width_pixels = self.scale * self.body_width
+        self.body_height = 0.3 #m
+        self.body_height_pixels = self.scale * self.body_height
+        self.goal = np.array([1, 1]) # !
+        self.heading = 0
     
     # . Testing functions
     # TODO validate the functionality of magnetism stuff
@@ -52,7 +78,7 @@ class MagnetoRLPlugin (object):
         return True, ''
     
     def begin_episode_cb (self, msg:Trigger):
-        success = self.begin_sim_episode()
+        success = self.begin_sim_episode()        
         return success, ''
     
     def end_episode_cb (self, msg:Trigger):
@@ -72,41 +98,6 @@ class MagnetoRLPlugin (object):
         
         return True, ''
     
-    def test_get_state (self, msg):
-        # srv = ReportMagnetoState()
-        res = self.get_magneto_state()
-        rospy.loginfo(res)
-        rospy.loginfo(f'Ground pose: {res.ground_pose}')
-        rospy.loginfo(f'Ground pose: {res.body_pose}')
-        return True, ''
-    
-    def test_action_command (self, msg):
-        # srv = UpdateMagnetoAction()
-        
-        if self.last_foot_placed is not None:
-            last_step_index = self.naive_walk_order.index(self.last_foot_placed)
-            if last_step_index < len(self.naive_walk_order) - 1:
-                self.last_foot_placed = self.naive_walk_order[last_step_index + 1]
-            else:
-                self.last_foot_placed = self.naive_walk_order[0]
-        else:
-            self.last_foot_placed = self.naive_walk_order[0]
-        
-        pose = Pose()
-        pose.position.x = -0.1
-        pose.position.y = 0.
-        pose.position.z = 0.
-        pose.orientation.w = 1.
-        pose.orientation.x = 0.
-        pose.orientation.y = 0.
-        pose.orientation.z = 0.
-        
-        self.set_magneto_action(self.link_idx[self.last_foot_placed], pose)
-        
-        # ! Recognize this will be crucial to keep for the gym integration!
-        rospy.sleep(self.command_sleep_duration)
-        return True, ''
-    
     # . Simulator Dynamics
     def provide_magnetic_force_modifier (self, msg):
         # TODO
@@ -116,29 +107,26 @@ class MagnetoRLPlugin (object):
         res = self.get_magneto_state()
         return res
     
+    def update_goal (self, goal):
+        self.goal = goal
+    
     def update_action (self, link_id:str, pose:Pose) -> bool:
-        # rospy.loginfo(f'[update_action] Setting new action for link_id {link_id} (link_idx: {self.link_idx[link_id]}) of pose\n{pose}')
         res = self.set_magneto_action(self.link_idx[link_id], pose)
         rospy.sleep(self.command_sleep_duration)
         return res.success
     
+    # WIP
     def begin_sim_episode (self) -> bool:
         node = roslaunch.core.Node('my_simulator', 
                             'magneto_ros') #,
-                            # args='config/Magneto/USERCONTROLWALK.yaml')
         launch = roslaunch.scriptapi.ROSLaunch()
         launch.start()
         self.sim_process = launch.launch(node)
-        # rospy.loginfo(f'[begin_sim_episode] Starting simulation episode. Process is alive: {self.sim_process.is_alive()}')
+        
         time.sleep(3)
         
         self.set_magneto_action = rospy.ServiceProxy('set_magneto_action', UpdateMagnetoAction)
         self.get_magneto_state = rospy.ServiceProxy('get_magneto_state', ReportMagnetoState)
-        
-        #TODO: JARED: Trigger magnetism seed
-        self.mag_map.create_map()
-        # > Return "true I created that object"
-        # > Then, later, can call a function from seed_magnetism that will grab pixel val
         
         pyautogui.doubleClick(1440 + 500/2, 10 + self.vertical_pixel_calibration_offset)
         pyautogui.click(1440 + 500/2, 500/2)
@@ -146,46 +134,104 @@ class MagnetoRLPlugin (object):
         time.sleep(1)
         
         pyautogui.press('s')
-        # rospy.loginfo('[begin_sim_episode] Finished bringing up simulation.')
+        
+        start_state = self.get_magneto_state()
+        self.ground_pose = start_state.ground_pose
+        self.body_pose = start_state.body_pose
+        
+        self.foot_poses = [
+            start_state.AR_state.pose,
+            start_state.AL_state.pose,
+            start_state.BL_state.pose,
+            start_state.BR_state.pose,
+        ]
+        self.foot_mags = np.array([
+            start_state.AR_state.magnetic_force,
+            start_state.AL_state.magnetic_force,
+            start_state.BL_state.magnetic_force,
+            start_state.BR_state.magnetic_force,
+        ])
+        
+        self.raw_map, self.seed_locations, self.single_channel_map = self.mag_seeder.generate_map(self.num_seeds)
+        self.game_background = self.mag_seeder.transform_image_into_pygame(self.raw_map)
+        
         return True
     
     def end_sim_episode (self) -> bool:
-        # rospy.loginfo('[end_sim_episode] Ending simulation episode. Forcing shutdown of simulation...')
         pyautogui.click(1440 + 500/2, 500/2)
-        # pyautogui.click(1899, 21 + self.vertical_pixel_calibration_offset)
         pyautogui.click(1901, 21 + self.vertical_pixel_calibration_offset)
         self.sim_process.stop()
         time.sleep(1)
         return not self.sim_process.is_alive()
-    
-    # . Deprecated
-    def determine_next_step (self, req:FootPlacement) -> FootPlacementResponse:
-        
-        rospy.loginfo(f'Base pose:\n{req.base_pose}')
-        rospy.loginfo(f'p_al:\n{req.p_al}')
-        rospy.loginfo(f'p_ar:\n{req.p_ar}')
-        rospy.loginfo(f'p_bl:\n{req.p_bl}')
-        rospy.loginfo(f'p_br:\n{req.p_br}')
-        
-        point = Point()
-        point.x = -1 * float(input("Enter x step size: "))
-        point.y = -1 * float(input("Enter y step size: "))
-        point.z = 0
-        
-        if self.last_foot_placed is not None:
-            last_step_index = self.naive_walk_order.index(self.last_foot_placed)
-            if last_step_index < len(self.naive_walk_order) - 1:
-                self.last_foot_placed = self.naive_walk_order[last_step_index + 1]
-            else:
-                self.last_foot_placed = self.naive_walk_order[0]
-        else:
-            self.last_foot_placed = self.naive_walk_order[0]
-        
-        return self.link_idx[self.last_foot_placed], point
 
     def run (self):
         while not rospy.is_shutdown():
             rospy.spin()
+
+    def _render_frame (self):
+        if self.window is None:
+            pygame.init()
+            pygame.display.init()
+            self.window = pygame.display.set_mode((self.window_size, self.window_size))
+        if self.clock is None:
+            self.clock = pygame.time.Clock()
+        
+        canvas = pygame.Surface((self.window_size, self.window_size), pygame.SRCALPHA, 32)
+        canvas = canvas.convert_alpha()
+
+        body_center = self.cartesian_to_pygame_coordinates(np.array([self.body_pose.position.x, self.body_pose.position.y]))
+        pygame.draw.circle(
+            canvas,
+            (150, 150, 150),
+            center=body_center,
+            radius=self.body_radius * self.scale * 2 / 3,
+        )
+        
+        foot_pixel_positions = [self.cartesian_to_pygame_coordinates(np.array([self.foot_poses[ii].position.x, self.foot_poses[ii].position.y])) for ii in range(len(self.foot_poses))]
+        for ii in range(len(self.foot_poses)):
+            pygame.draw.circle(
+                canvas,
+                (150, 150, 150),
+                center=foot_pixel_positions[ii],
+                radius=self.foot_radius * self.scale,
+            )
+        
+        heading_end = self.cartesian_to_pygame_coordinates(np.array([self.body_pose.position.x, self.body_pose.position.y]) + np.array([self.heading_arrow_length * np.cos(self.heading), self.heading_arrow_length * np.sin(self.heading)]))
+        pygame.draw.line(
+                canvas,
+                (255, 255, 255),
+                start_pos=body_center,
+                end_pos=heading_end,
+                width=3,
+            )
+
+        goal_center = self.cartesian_to_pygame_coordinates(self.goal)
+        pygame.draw.circle(
+            canvas,
+            (0, 255, 0),
+            center=goal_center,
+            # radius=self.body_radius * self.scale / 2,
+            radius=0.20 * self.scale, # & this should be set to the tolerance of the at_goal() function in the environment
+        )
+        
+        self.window.blit(pygame.surfarray.make_surface(self.game_background), (0, 0))
+        self.window.blit(canvas, canvas.get_rect())
+        
+        myfont = pygame.font.SysFont("monospace", 15)
+        for ii in range(len(self.foot_poses)):
+            label = myfont.render(str(ii), 1, (255,255,0))
+            self.window.blit(label, foot_pixel_positions[ii])
+    
+        pygame.event.pump()
+        pygame.display.update()
+        # self.clock.tick(self.fps)
+    
+    def cartesian_to_pygame_coordinates (self, coords):
+        output = np.array([
+            coords[1] * (self.im_width / (2 * self.wall_width)) + self.im_width / 2,
+            coords[0] * (self.im_height / (2 * self.wall_height)) + self.im_height / 2,
+        ])
+        return output
 
 if __name__ == "__main__":
     magneto_rl = MagnetoRLPlugin()

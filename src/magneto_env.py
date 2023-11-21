@@ -50,9 +50,17 @@ class MagnetoEnv (Env):
         # self.y_step = {0:-0.4, 1:-0.2, 2:0.0, 3:0.2, 4:0.4}
         # self.action_space = spaces.Discrete(25)
         # self.x_step = {0:-0.4, 1:-0.2, 2:-0.1, 3:0.0, 4:0.1, 5:0.2, 6:0.4}
+        
+        self.step_action_discretization = 7
         self.x_step = {0:-0.08, 1:-0.04, 2:-0.02, 3:0.0, 4:0.02, 5:0.04, 6:0.08}
         self.y_step = {0:-0.08, 1:-0.04, 2:-0.02, 3:0.0, 4:0.02, 5:0.04, 6:0.08}
-        self.action_space = spaces.Discrete(49)
+        self.action_space = spaces.Discrete(self.step_action_discretization**2)
+        
+        # self.step_action_discretization = 5
+        # self.x_step = {0:-0.4, 1:-0.2, 2:0.0, 3:0.2, 4:0.4}
+        # self.y_step = {0:-0.4, 1:-0.2, 2:0.0, 3:0.2, 4:0.4}
+        # # self.action_space = spaces.Discrete(4 * self.step_action_discretization**2)
+        # self.action_space = spaces.Discrete(self.step_action_discretization**2)
         
         '''
         This is currently:
@@ -68,14 +76,14 @@ class MagnetoEnv (Env):
         # self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(self.n_history,1,self.obs_scale.shape[0]), dtype=np.float32)
         # self.lstm_state = np.zeros((self.n_history, 1, self.obs_scale.shape[0]), dtype=np.float32)
         
-        obs_low = np.array([
-            -10, -10, 0, 0, 0, 0,
-            # -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, 0, 0, 0, 0,
-        ])
-        obs_high = np.array([
-            10, 10, 1, 1, 1, 1
-            # 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 1, 1, 1, 1
-        ])
+        # obs_low = np.array([
+        #     -10, -10, 0, 0, 0, 0,
+        #     # -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, 0, 0, 0, 0,
+        # ])
+        # obs_high = np.array([
+        #     10, 10, 1, 1, 1, 1
+        #     # 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 1, 1, 1, 1
+        # ])
         # self.observation_space = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
         
         # self.observation_space = spaces.Dict({
@@ -96,13 +104,15 @@ class MagnetoEnv (Env):
         
         self.observation_space = spaces.Dict({
             'goal': spaces.Box(low=-10, high=10, shape=(2,)),
+            # 'feet': spaces.Box(low=-0.3, high=0.3, shape=(4,2)),
             'magnetism': spaces.Box(low=0, high=1, shape=(4,)),
         })
         
         self.link_idx_lookup = {0:'AR', 1:'AL', 2:'BL', 3:'BR'}
         self.max_foot_step_size = 0.08 # ! remember this is here!
         
-        self.max_timesteps = 1500
+        # self.max_timesteps = 1500
+        self.max_timesteps = 3000
         
         self.state_history = []
         self.action_history = []
@@ -116,7 +126,7 @@ class MagnetoEnv (Env):
         action = self.gym_2_action(gym_action)
         self.action_history.append(action)
         
-        # # . Taking specified action
+        # # # . Taking specified action
         # success = self.plugin.update_action(self.link_idx_lookup[action.idx], action.pose)
         # # .make permutation of remaining three legs
         # legs = np.delete(np.array([0, 1, 2, 3]), action.idx)
@@ -188,12 +198,17 @@ class MagnetoEnv (Env):
                 #     curr = np.array([state.foot2.pose.position.x, state.foot2.pose.position.y])
                 # elif action.idx == 3:
                 #     curr = np.array([state.foot3.pose.position.x, state.foot3.pose.position.y])
+                # paraboloid_scaling_factor = 0.01
                 paraboloid_scaling_factor = 0.01
                 reward = -1 * paraboloid_scaling_factor * self.reward_paraboloid.eval(curr)
                 # TODO loop create rewards around each seed location to try to help keep the robot away from them
                 gaussian_scaling_factor = 1
                 for ii in range(len(self.reward_gaussians)):
                     reward += -1 * gaussian_scaling_factor * self.reward_gaussians[ii].eval(curr)
+                # # ! this value definitely needs to be tuned!
+                # modified_penalty = -10
+                # if self.plugin.foot_modified == True:
+                #     reward += modified_penalty
             
             elif strategy == "progress":
                 reward = self.proximity_reward(state, action, multipliers=[1.5, 1.]) # multipliers are for negative and positive progress, respectively
@@ -378,8 +393,14 @@ class MagnetoEnv (Env):
         
         # action.pose.position.x = self.x_step[int(gym_action / 5)]
         # action.pose.position.y = self.y_step[gym_action % 5]
-        action.pose.position.x = self.x_step[int(gym_action / 7)]
-        action.pose.position.y = self.y_step[gym_action % 7]
+        
+        action.pose.position.x = self.x_step[int(gym_action / self.step_action_discretization)]
+        action.pose.position.y = self.y_step[gym_action % self.step_action_discretization]
+        
+        # action.idx = int(gym_action / (self.step_action_discretization**2))
+        # action.pose.position.x = self.x_step[int(gym_action / (4 * self.step_action_discretization))]
+        # action.pose.position.y = self.y_step[int(gym_action / 4) % self.step_action_discretization]
+        
         return action
     # def gym_2_action (self, gym_action) -> MagnetoAction:
     #     action = MagnetoAction()
@@ -425,9 +446,13 @@ class MagnetoEnv (Env):
         
         if self.sim_mode == "full":
             relative_goal = -1 * relative_goal
+            relative_foot0 = -1 * relative_foot0
+            relative_foot1 = -1 * relative_foot1
+            relative_foot2 = -1 * relative_foot2
+            relative_foot3 = -1 * relative_foot3
         
         # gym_obs = np.concatenate((relative_goal, relative_foot0, relative_foot1, relative_foot2, relative_foot3, magnetic_forces), dtype=np.float32)
-        gym_obs = np.concatenate((relative_goal, magnetic_forces), dtype=np.float32)
+        # gym_obs = np.concatenate((relative_goal, magnetic_forces), dtype=np.float32)
         # gym_obs = gym_obs / self.obs_scale
         
         # robot_pixel_location = self.plugin.mag_seeder.cartesian_to_image_coordinates(np.array([state.body_pose.position.x, state.body_pose.position.y]))
@@ -445,6 +470,19 @@ class MagnetoEnv (Env):
             'goal': relative_goal,
             'magnetism': magnetic_forces,
         }
+        
+        # feet = np.array([
+        #     relative_foot0,
+        #     relative_foot1,
+        #     relative_foot2,
+        #     relative_foot3,
+        # ])
+        
+        # gym_obs = {
+        #     'goal': relative_goal,
+        #     'feet': feet,
+        #     'magnetism': magnetic_forces,
+        # }
         
         # gym_obs = self.plugin.paint_robot_and_goal(
         #     np.array([state.body_pose.position.x, state.body_pose.position.y]), 

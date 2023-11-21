@@ -120,16 +120,16 @@ class MagneticSeeder (object):
     
     # TODO add utility to make sure area around robot starting position and goal are both safe
 
-# # %%
+# %%
 # import matplotlib.pyplot as plt
 
 # seeder = MagneticSeeder()
-# map = seeder.generate_map(100)
+# map, _, _ = seeder.generate_map(10)
 
 # plt.imshow(map)
 # plt.show()
 
-# # %%
+# %%
 # map2 = seeder.transform_image_into_pygame(map)
 
 # plt.imshow(map2)
